@@ -18,7 +18,8 @@
 RH_RF69 radio;
 CRGB led[BUFFER_LENGTH];
 uint8_t offset[BUFFER_LENGTH];
-uint8_t data[1];
+uint8_t rxBuffer[1] = {0};
+uint8_t incomingPacketLength = 1;
 
 class Pattern {
 public:
@@ -29,12 +30,12 @@ public:
 void Pattern::offsets(int input, uint8_t offset[]) {
   int idx = 0;
   for (int fb=0; fb<2; fb++) { 
-    for (int row=0; row<5; row++) {
+    for (int row=5; row<10; row++) {
       for (int col=0; col<5; col++) {
         if (!fb) {
           offset[idx++] = row;
         } else {
-          offset[idx++] = 4 - row;
+          offset[idx++] = 14 - row;
         }
       }
     }
@@ -42,7 +43,7 @@ void Pattern::offsets(int input, uint8_t offset[]) {
 }
 
 
-static uint8_t input = 0;
+//static uint8_t input = 0;
 ColorMap cm;
 Pattern pattern;
 
@@ -65,20 +66,26 @@ void setup() {
   radio.init();
   radio.setFrequency(915.0);
   radio.setModemConfig(RH_RF69::GFSK_Rb19_2Fd38_4);
-
 }
 
 void loop() {
-  data[0] = input;
-  radio.send(data, 1);
+//  pattern.offsets(input, offset);
+//  for (int i=0; i<BUFFER_LENGTH; i++){
+//    led[i] = cm.color(offset[i] - input);
+//  }
+//
+//  FastLED.show();
+//  delay(100);
+//  input += 1;
+  unsigned long currentMillis = millis();
   
-  radio.waitPacketSent();
-  pattern.offsets(input, offset);
-  for (int i=0; i<BUFFER_LENGTH; i++){
-    led[i] = cm.color(offset[i] - input);
+  if (radio.available()) {
+    radio.recv(rxBuffer, &incomingPacketLength);
+    pattern.offsets(rxBuffer[0], offset);
+    for (int i=0; i<BUFFER_LENGTH; i++){
+      led[i] = cm.color(offset[i] - rxBuffer[0]);
+    }
+    FastLED.showColor(CHSV(rxBuffer[0], 255, 255));
+    delay(50);
   }
-
-  FastLED.show();
-  delay(100);
-  input += 1;
 }
