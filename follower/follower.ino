@@ -33,9 +33,9 @@ RHReliableDatagram reciever(radio, TO_ADDRESS);
 
 // the array used to set the lights
 CRGB led[BUFFER_LENGTH];
-uint8_t incomingPacketLength = 4;
+uint8_t incomingPacketLength = 5;
 // the array that gets sent over the radio
-uint8_t data[4];
+uint8_t data[5];
 bool firstReception = true;
 
 ColorMap* cm;
@@ -84,7 +84,8 @@ void loop() {
       firstReception = false;
     }
     for (int i=0; i<BUFFER_LENGTH; i++) {
-      led[i] = cm->color(offset[i] - data[0]);
+      uint8_t color = data[4] ? offset[i] + data[0] : offset[i] - data[0];
+      led[i] = cm->color(color);
     } 
     FastLED.show();
   }

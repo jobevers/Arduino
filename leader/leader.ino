@@ -36,9 +36,10 @@ uint8_t rows[] = {4, 3, 2, 1, 0};
 uint8_t cols[] = {0, 1, 2, 3, 4};
 
 ColorMap* cm;
-uint8_t currentOffset = 3;
+uint8_t currentOffset;
+
 // the array that gets sent over the radio
-const uint8_t outgoingPacketLength = 4;
+const uint8_t outgoingPacketLength = 5;
 uint8_t data[outgoingPacketLength];
 
 
@@ -81,6 +82,7 @@ void loop() {
     data[1] = currentOffset;
     data[2] = colorMapIdx;
     data[3] = startingColor;
+    data[4] = random8(2);
   }
 
   data[0] = input;
@@ -88,7 +90,8 @@ void loop() {
     // The processing between here and below should be the same between both
     // the leader and the follower
     for (int i=0; i<BUFFER_LENGTH; i++) {
-      led[i] = cm->color(offset[i] - data[0]);
+      uint8_t color = data[4] ? offset[i] + data[0] : offset[i] - data[0];
+      led[i] = cm->color(color);
     } 
     FastLED.show();
     // End similarity
