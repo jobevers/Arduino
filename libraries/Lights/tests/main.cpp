@@ -153,3 +153,9 @@ TEST_CASE ("Making full right patterns") {
 }
 
 
+TEST_CASE ("Testing Pick Option") {
+    REQUIRE (pickOption(42, 0, 1, colorCutoff, nCutoffs) == 0);
+    REQUIRE (pickOption(43, 0, 1, colorCutoff, nCutoffs) == 1);
+    REQUIRE (pickOption(200, 0, 1, colorCutoff, nCutoffs) == 0);
+    REQUIRE (pickOption(255, 0, 1, colorCutoff, nCutoffs) == 1);
+}

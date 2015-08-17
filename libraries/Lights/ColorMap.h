@@ -1,7 +1,7 @@
 #ifndef ColorMap_h
 #define ColorMap_h
 
-#include <FastLED.h>
+#include <pixeltypes.h>
 
 class ColorMap {
 public:

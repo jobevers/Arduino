@@ -3,15 +3,17 @@
 
 #include <stdint.h>
 
+const uint8_t nRows = 5;
+const uint8_t nCols = 5;
 const uint8_t midRows[] = {2, 1, 0, 1, 2};
 const uint8_t midCols[] = {4, 3, 2, 1, 0, 0, 1, 2, 3, 4};
 
-// this is generate from the make_c_constants.py script
+// this is generated from the make_c_constants.py script
 // It goes from 0->256->0 six times
 // This is generated due to general difficulty in getting
 // integer math to wrap nicely; in making the space/computation
 // tradeoff, this is choosing to use more space.
-const uint8_t wrappedSixCycle = {
+const uint8_t wrappedSixCycle[] = {
       0,  12,  24,  36,  48,  60,  72,  84,  96, 108, 120, 132, 144, 156, 168, 180,
     192, 204, 216, 228, 240, 252, 247, 235, 223, 211, 199, 187, 175, 163, 151, 139,
     127, 115, 103,  91,  79,  67,  55,  43,  31,  19,   7,   5,  17,  29,  41,  53,
@@ -30,4 +32,7 @@ const uint8_t wrappedSixCycle = {
     186, 174, 162, 150, 138, 126, 114, 102,  90,  78,  66,  54,  42,  30,  18,   6,
 };
 
+// want to switch every 42.667 but, this is good enough
+const uint8_t nCutoffs = 5;
+const uint8_t colorCutoffs[] = {42, 85, 127, 170, 213};
 #endif

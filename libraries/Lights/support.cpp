@@ -69,3 +69,16 @@ uint8_t midColOffset(uint8_t idx, uint8_t row, uint8_t col) {
 uint8_t midDiagOffset(uint8_t idx, uint8_t row, uint8_t col) {
     return midRowOffset(idx, row, col) + midColOffset(idx, row, col);
 }
+
+uint8_t pickOption(
+        uint8_t input, uint8_t optionA, uint8_t optionB,
+        uint8_t cutoffs[], uint8_t nCutoffs) {
+    bool option = true;
+    for (int i=0; i<nCutoffs; i++) {
+        if (input < cutoffs[i]) {
+            break
+        }
+        option = !option;
+    }
+    return option ? optionA : optionB;
+}
