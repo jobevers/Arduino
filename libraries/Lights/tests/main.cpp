@@ -1,6 +1,9 @@
 #define CATCH_CONFIG_MAIN  // This tells Catch to provide a main() - only do this in one cpp file
 #include "catch.hpp"
+
+#include <constants.h>
 #include <support.h>
+
 
 
 TEST_CASE ("Reverse a list") {
@@ -154,8 +157,9 @@ TEST_CASE ("Making full right patterns") {
 
 
 TEST_CASE ("Testing Pick Option") {
-    REQUIRE (pickOption(42, 0, 1, colorCutoff, nCutoffs) == 0);
-    REQUIRE (pickOption(43, 0, 1, colorCutoff, nCutoffs) == 1);
-    REQUIRE (pickOption(200, 0, 1, colorCutoff, nCutoffs) == 0);
-    REQUIRE (pickOption(255, 0, 1, colorCutoff, nCutoffs) == 1);
+    REQUIRE (pickOption(41, 0, 1, colorCutoffs, nCutoffs) == 0);
+    REQUIRE (pickOption(42, 0, 1, colorCutoffs, nCutoffs) == 0);
+    REQUIRE (pickOption(43, 0, 1, colorCutoffs, nCutoffs) == 1);
+    REQUIRE (pickOption(200, 0, 1, colorCutoffs, nCutoffs) == 0);
+    REQUIRE (pickOption(255, 0, 1, colorCutoffs, nCutoffs) == 1);
 }

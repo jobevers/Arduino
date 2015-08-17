@@ -32,4 +32,6 @@ uint8_t midDiagOffset(uint8_t idx, uint8_t row, uint8_t col);
 
 const int nOffsets = 8;
 const offsetFn allOffsets[] = {nullOffset, idxOffset, rowOffset, colOffset, diagOffset, midRowOffset, midColOffset, midDiagOffset};
+
+uint8_t pickOption(uint8_t input, uint8_t optionA, uint8_t optionB, uint8_t cutoffs[], uint8_t nCutoffs);
 #endif

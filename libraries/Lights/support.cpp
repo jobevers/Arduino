@@ -75,10 +75,11 @@ uint8_t pickOption(
         uint8_t cutoffs[], uint8_t nCutoffs) {
     bool option = true;
     for (int i=0; i<nCutoffs; i++) {
-        if (input < cutoffs[i]) {
-            break
+        if (input <= cutoffs[i]) {
+            break;
         }
         option = !option;
     }
     return option ? optionA : optionB;
 }
+
