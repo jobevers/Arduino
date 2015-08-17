@@ -42,7 +42,7 @@ CHSV ComplementaryColorMapByValue::color(uint8_t input) {
 ColorMap* createColorMap(uint8_t choice, uint8_t color) {
     switch (choice) {
     case 0:
-        return new RainbowColorMap(color);
+        return new ComplementaryColorMapByValue(color);
     case 1:
         return new FadeToWhiteColorMap(color);
     case 2:
@@ -51,7 +51,7 @@ ColorMap* createColorMap(uint8_t choice, uint8_t color) {
         return new ComplementaryColorMapByHue(color);
     case 4:
         return new ComplementaryColorMapBySaturation(color);
-    case 5:
-        return new ComplementaryColorMapByValue(color);
+    default:
+        return new RainbowColorMap(color);
     }
 };

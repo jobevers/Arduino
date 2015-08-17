@@ -55,7 +55,7 @@ public:
     CHSV color (uint8_t);
 };
 
-const uint8_t nColorMaps = 6;
+const uint8_t nColorMaps = 10; // setting this to ten gives the rainbow map a 50% chance of being selected
 ColorMap* createColorMap(uint8_t choice, uint8_t color);
 
 #endif
