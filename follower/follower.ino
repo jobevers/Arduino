@@ -14,7 +14,7 @@
 
 
 // input is the cause of color change
-uint8_t input = 1;
+uint8_t input = 1; // set to one so that in the first pass of the loop we dont reinitialize
 
 RH_RF69 radio;
 RHReliableDatagram reciever(radio, TO_ADDRESS);
