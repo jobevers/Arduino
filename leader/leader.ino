@@ -10,6 +10,7 @@
 #include <support.h>
 #include <constants.h>
 #include <progmem.h>
+#include <Painter.h>
 
 #define BUFFER_LENGTH 50 // >100LEDs unsupported
 #define NUM_LEDS 50
@@ -22,7 +23,7 @@
 
 
 // input is the cause of color change
-uint8_t input = 0;
+uint8_t input = 1; // set to one so that in the first pass of the loop we dont reinitialize
 
 // the array used to make patterns
 uint8_t offset[BUFFER_LENGTH];
@@ -35,12 +36,14 @@ CRGB led[BUFFER_LENGTH];
 uint8_t rows[] = {4, 3, 2, 1, 0};
 uint8_t cols[] = {0, 1, 2, 3, 4};
 
+Painter painter(rows, cols, led);
+
 ColorMap* cm;
 uint8_t currentOffset;
 
 // the array that gets sent over the radio
-const uint8_t outgoingPacketLength = 5;
-uint8_t data[outgoingPacketLength];
+//const uint8_t outgoingPacketLength = 5;
+uint8_t data[packetLength];
 
 
 void initializeLeds()
@@ -69,35 +72,35 @@ void setOffset(uint8_t offsetIdx) {
 void setup() {
   initializeLeds();
   initializeRadio();
+  patternChange(data);
+  painter.reset(data);
+  ensureDelivery(data, packetLength, TO_ADDRESS);
+}
+
+void patternChange(uint8_t* data) {
+    data[0] = random8(nOffsets); // pattern/offset
+    data[1] = random8(nColorMaps); // colormap
+    data[2] = random8(); // starting color (argument for colormap)
+    data[3] = random8(2);  // forwards or backwards
+}
+
+
+void ensureDelivery(uint8_t* data, uint8_t len, uint8_t to) {
+  while (true) {
+    sender.sendtoWait(data, len, to);
+    break;
+  }
 }
 
 void loop() {
   if (input == 0) {
-    delete cm;
-    uint8_t colorMapIdx = random8(nColorMaps);
-    uint8_t startingColor = random8();
-    cm = createColorMap(colorMapIdx, startingColor);
-    currentOffset = random8(nOffsets);
-    setOffset(currentOffset);
-    data[1] = currentOffset;
-    data[2] = colorMapIdx;
-    data[3] = startingColor;
-    data[4] = random8(2);
+    patternChange(data);
+    painter.reset(data);
+    ensureDelivery(data, packetLength, TO_ADDRESS);
   }
 
-  data[0] = input;
-  if (sender.sendtoWait(data, outgoingPacketLength, TO_ADDRESS)) {
-    // The processing between here and below should be the same between both
-    // the leader and the follower
-    for (int i=0; i<BUFFER_LENGTH; i++) {
-      uint8_t color = data[4] ? offset[i] + data[0] : offset[i] - data[0];
-      led[i] = cm->color(color);
-    } 
-    FastLED.show();
-    // End similarity
-
-    delay(cm->delay);
-    input += 1;
-  } 
+  painter.paint(input);
+  painter.wait();
+  input += 1;
 }
 

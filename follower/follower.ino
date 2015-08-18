@@ -10,6 +10,7 @@
 #include <support.h>
 #include <constants.h>
 #include <progmem.h>
+#include <Painter.h>
 
 
 #define BUFFER_LENGTH 50 // >100LEDs unsupported
@@ -23,7 +24,7 @@
 
 
 // input is the cause of color change
-uint8_t input = 0;
+uint8_t input = 1;
 
 // the array used to make patterns
 uint8_t offset[BUFFER_LENGTH];
@@ -33,7 +34,6 @@ RHReliableDatagram reciever(radio, TO_ADDRESS);
 
 // the array used to set the lights
 CRGB led[BUFFER_LENGTH];
-uint8_t incomingPacketLength = 5;
 // the array that gets sent over the radio
 uint8_t data[5];
 bool firstReception = true;
@@ -42,6 +42,8 @@ ColorMap* cm;
 uint8_t currentOffset = 0;
 uint8_t rows[] = {4, 3, 2, 1, 0};
 uint8_t cols[] = {5, 6, 7, 8, 9};
+
+Painter painter(rows, cols, led);
 
 void initializeLeds()
 {
@@ -62,32 +64,40 @@ void initializeRadio()
   reciever.init();
 }
 
-void setOffset(uint8_t offsetIdx) {
-  makePattern(offset, rows, 5, cols, 5, allOffsets[offsetIdx]); 
-}
+
 
 void setup() {
   initializeLeds();
   initializeRadio();
-  setOffset(currentOffset);
+  while (true) {
+    uint8_t incomingPacketLength = packetLength;
+    if (reciever.recvfromAckTimeout(data, &incomingPacketLength, 1000, NULL, NULL, NULL, NULL)) {
+      painter.reset(data);
+      break;
+    }
+  }
 }
 
+void initializeColorMapAndOffset(uint8_t* data) {
+  delete cm;
+  cm = createColorMap(data[2], data[3]);
+  //setOffset(data[1]);
+}
+
+
 void loop() {
-  if (reciever.recvfromAckTimeout(data, &incomingPacketLength, 200, NULL, NULL, NULL, NULL)) {
-    // The processing between here and below should be the same between both
-    // the leader and the follower
-    if (data[0] == 0 || firstReception) {
-      setOffset(data[1]);
-      currentOffset = data[1];
-      delete cm;
-      cm = createColorMap(data[2], data[3]);
-      firstReception = false;
+  if (input == 0) {
+    while (true) {
+      uint8_t incomingPacketLength = packetLength;
+      if (reciever.recvfromAckTimeout(data, &incomingPacketLength, 1000, NULL, NULL, NULL, NULL)) {
+        painter.reset(data);
+        break;
+      }
     }
-    for (int i=0; i<BUFFER_LENGTH; i++) {
-      uint8_t color = data[4] ? offset[i] + data[0] : offset[i] - data[0];
-      led[i] = cm->color(color);
-    } 
-    FastLED.show();
   }
+  
+  painter.paint(input);
+  painter.wait();
+  input++;
 }
 
