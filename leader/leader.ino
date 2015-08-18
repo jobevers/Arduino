@@ -50,6 +50,11 @@ void initializeRadio()
   sender.init();
 }
 
+void initializeRandom() {
+  randomSeed(analogRead(0));
+  random16_set_seed(random());
+}
+
 void patternChange(uint8_t* data) {
     data[0] = random8(nOffsets); // pattern/offset
     data[1] = random8(nColorMaps); // colormap
@@ -61,14 +66,16 @@ void ensureDelivery(uint8_t* data, uint8_t len, uint8_t to) {
   patternChange(data);
   painter.reset(data);
   while (true) {
-    sender.sendtoWait(data, len, to);
-    break;
+    if (sender.sendtoWait(data, len, to)) {
+      break;
+    }
   }
 }
 
 void setup() {
   initializeLeds();
   initializeRadio();
+  initializeRandom();
   ensureDelivery(data, packetLength, TO_ADDRESS);
 }
 
