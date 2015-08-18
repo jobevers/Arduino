@@ -3,6 +3,13 @@
 
 #include <stdint.h>
 
+
+#define LED_DATA_PIN 5
+#define LED_INDICATOR_PIN 9 // Hardwired on the board
+#define FROM_ADDRESS 11
+#define TO_ADDRESS 12
+
+
 const uint8_t nRows = 5;
 const uint8_t nCols = 5;
 const uint8_t ledBufferLength = nRows * nCols * 2;
