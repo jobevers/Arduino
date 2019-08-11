@@ -11,7 +11,7 @@
 #include <SoftwareSerial.h>
 
 
-#define DEBUG 0
+#define DEBUG 1
 // This allows us to hookup a second arduino
 // to see what data is coming in from the BLE
 // (But, slows down the whole process as we now
@@ -46,7 +46,7 @@ CHSV target_led[N];
 // new data from the HM10 gets stored in next
 CHSV next_led[N];
 // How long between key frames
-const int KEY_FRAME_DURATION=100;
+const int KEY_FRAME_DURATION = 250;
 
 unsigned long prev_time;
 unsigned long target_time;
@@ -95,25 +95,23 @@ void loop() {
     uint8_t data[20];
     // Will take 20.8 ms to ready 20 bytes (at 9600 baud)
     Serial.readBytes(data, 20);
+    Serial.println("OK");
 #if DEBUG == 1
-    //mySerial.write(data, 20);
+    mySerial.write(data, 20);
 #endif
     // Currently only one message type
-    // which is 3 pixels * 3 bytes
-    for (int i = 0; i < 3; i++) {
-      int offset = i * 3;
-      next_led[i] = CHSV(data[offset], data[offset + 1], data[offset + 2]);
+    // which is 3 pixels * 1 byte per pixel
+    for (int i = 0; i < N; i++) {
+      next_led[i] = unpack(data[i]);
     }
 #if DEBUG == 1
-    mySerial.write(next_led[0].hue);
+    //mySerial.write(next_led[0].hue);
 #endif
-    // Have a fixed 'framerate' of 250 ms
     have_next = true;
   }
 
   // TODO: what if we haven't recieved all of the next key frame yet?!
   //       I can't just wait, but I also have bad info.
-  //       Can try to send back some sort of confirmation?
   unsigned long now = millis();
   if (now >= target_time) {
     if (have_next) {
@@ -121,9 +119,18 @@ void loop() {
         prev_led[i] = target_led[i];
         target_led[i] = next_led[i];
       }
+    } else {
+      // In the situation we don't have the updated frame
+      // setting prev = target just means that the pixels
+      // stay constant for 250ms. Which isn't great
+      // but at least it isn't a flicker.
+      for (int i = 0; i < N; i++) {
+        prev_led[i] = target_led[i];
+      }      
     }
     prev_time = target_time;
     target_time = next_time;
+    // Have a fixed 'framerate' of 250 ms
     next_time += KEY_FRAME_DURATION;
     have_next = false;
     digitalWrite(LED_BUILTIN, LOW);
@@ -135,6 +142,23 @@ void loop() {
     interpolate();
     FastLED.show();
   }
+}
+
+// we don't have enough bandwidth to send a full 3 bytes
+// per pixel so we're going with 16 different hues, 4 saturations and 4 values.
+// There might be more useful ways of sending 256 colors.
+CHSV unpack(uint8_t datum) {
+  // 16 different hues, evenly spaced:
+  // 0,16,32,48,...,224,240
+  // First 4 bits:    11110000
+  uint8_t hue = (datum & 0xF0);
+  // This returns 63, 127, 191, 255
+  // The next 2 bits: 00001100
+  uint8_t sat = ((datum & 0x0C) << 4) | 0x3F;
+  // This returns 63, 127, 191, 255
+  // The last 2 bits: 00000011
+  uint8_t val =  ((datum & 0x03) << 6) | 0x3F;
+  return CHSV(hue, sat, val);
 }
 
 
@@ -149,9 +173,9 @@ void interpolate() {
     led[i] = hsv[i];
   }
 #if DEBUG == 1
-//  mySerial.write(prev_led[0].hue);
-//  mySerial.write(hsv[0].hue);
-//  mySerial.write(target_led[0].hue);
+  //  mySerial.write(prev_led[0].hue);
+  //  mySerial.write(hsv[0].hue);
+  //  mySerial.write(target_led[0].hue);
 #endif
 }
 

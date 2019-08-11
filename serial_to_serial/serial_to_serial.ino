@@ -14,11 +14,23 @@ void setup() {
   mySerial.begin(9600);
 }
 
+int idx = 0;
+
 void loop() {
+  uint8_t data[20];
   while (mySerial.available()) {
     uint8_t d;
     d = mySerial.read();
-    Serial.println(d, DEC);
+    data[idx] = d;
+    idx++;
+    if (idx >= 20) {
+      for (int i = 0; i<20; i++) {
+        Serial.print(data[i], HEX);
+        Serial.print(" ");
+      }
+      Serial.print("\n");
+      idx = 0;
+    }
 //    char c;
 //    c = mySerial.read();
 //    Serial.println(c);
