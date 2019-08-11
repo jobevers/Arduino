@@ -11,7 +11,7 @@
 #include <SoftwareSerial.h>
 
 
-#define DEBUG 1
+#define DEBUG 0
 // This allows us to hookup a second arduino
 // to see what data is coming in from the BLE
 // (But, slows down the whole process as we now
@@ -25,9 +25,9 @@ SoftwareSerial mySerial(rxPin, txPin);
 #endif
 
 // this is how many pixels are on the front
-#define N 3
+#define N 20
 // And we have no back, so this is the same
-#define BUFFER_LENGTH 3
+#define BUFFER_LENGTH 20
 #define LED_INDICATOR_PIN LED_BUILTIN
 // Wire the LED data line to this pin
 #define LED_DATA_PIN 4
@@ -80,8 +80,10 @@ void setup() {
   memset8(target_led, 32, BUFFER_LENGTH * sizeof(CRGB));
   memset8(next_led, 128, BUFFER_LENGTH * sizeof(CRGB));
 
-  // TODO: should ws2811 be changed to ws2812b?
-  FastLED.addLeds<WS2811, LED_DATA_PIN, RGB>(led, BUFFER_LENGTH).setCorrection(Typical8mmPixel);
+  // My test string of LEDs:
+  // FastLED.addLeds<WS2811, LED_DATA_PIN, RGB>(led, BUFFER_LENGTH).setCorrection(Typical8mmPixel);
+  // The actual jackets
+  FastLED.addLeds<WS2812B, LED_DATA_PIN, GRB>(led, BUFFER_LENGTH).setCorrection(Typical8mmPixel);
   FastLED.show();
   digitalWrite(LED_BUILTIN, LOW);
 }
@@ -95,6 +97,7 @@ void loop() {
     uint8_t data[20];
     // Will take 20.8 ms to ready 20 bytes (at 9600 baud)
     Serial.readBytes(data, 20);
+    // Maybe send back a timestamp here
     Serial.println("OK");
 #if DEBUG == 1
     mySerial.write(data, 20);
@@ -164,11 +167,10 @@ CHSV unpack(uint8_t datum) {
 
 void interpolate() {
   uint8_t scale = getScale();
-  // Does this blend in RGB space (probably) or HSV space?
-  // and do I care?
-  // If prev_led and target_led were CHSV it would blend in HSV space.
-  // TODO: convert all of the LED arrays to CHSV!
+  // we blend into HSV so that this uses HSV for the interpolation
   blend(prev_led, target_led, hsv, N, scale);
+  // and then copy the results into the LED array.
+  // which is where FASTLed converts it into RGB for us.
   for (int i = 0; i < N; i++) {
     led[i] = hsv[i];
   }
