@@ -21,9 +21,9 @@ SoftwareSerial mySerial(rxPin, txPin);
 #endif
 
 // this is how many pixels are on the front
-#define N 20
+#define N 25
 // And we have no back, so this is the same
-#define BUFFER_LENGTH 20
+#define BUFFER_LENGTH 50
 #define LED_INDICATOR_PIN LED_BUILTIN
 // Wire the LED data line to this pin
 #define LED_DATA_PIN 4
@@ -71,10 +71,10 @@ void setup() {
 
   // Set uninitialised LEDs to a faint grey
   // just so that we know that they are on
-  memset8(led, 2, BUFFER_LENGTH * sizeof(CRGB));
-  memset8(prev_led, 2, BUFFER_LENGTH * sizeof(CRGB));
-  memset8(target_led, 32, BUFFER_LENGTH * sizeof(CRGB));
-  memset8(next_led, 128, BUFFER_LENGTH * sizeof(CRGB));
+  memset8(led, 4, BUFFER_LENGTH * sizeof(CRGB));
+  memset8(prev_led, 8, N * sizeof(CRGB));
+  memset8(target_led, 16, N * sizeof(CRGB));
+  memset8(next_led, 128, N * sizeof(CRGB));
 
   // My test string of LEDs:
   // FastLED.addLeds<WS2811, LED_DATA_PIN, RGB>(led, BUFFER_LENGTH).setCorrection(Typical8mmPixel);
@@ -95,7 +95,11 @@ void loop() {
     Serial.readBytes(data, 20);
     uint8_t msg = data[0];
     // Maybe send back a timestamp here
-    Serial.write(msg);
+    // Something weird is going on with writing.
+    // Probably need a voltage divider.
+    for (int i = 0; i < 20; i++) {
+      Serial.write(0x00);
+    }
 #if DEBUG == 1
     mySerial.write(data, 20);
 #endif
@@ -141,7 +145,7 @@ void loop() {
   // but this should happen every frame.
   EVERY_N_MILLISECONDS(30) {
     interpolate();
-    FastLED.show();
+    copyAndShow();
   }
 }
 
@@ -191,4 +195,12 @@ uint8_t getScale() {
     return 255;
   }
   return 255 * (now - prev_time) / (target_time - prev_time);
+}
+
+void copyAndShow() {
+  for (int i=N; i<BUFFER_LENGTH; i++) {
+    // This mapping -> the back is a reflection of the front
+    led[i] = led[BUFFER_LENGTH - (i + 1)];
+  }
+  FastLED.show();
 }
