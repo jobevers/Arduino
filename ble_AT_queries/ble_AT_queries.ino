@@ -7,7 +7,7 @@
 #include <SoftwareSerial.h>
 
 // Swap RX/TX connections on bluetooth chip
-//   Pin 7 --> Bluetooth TX
+//   Pin 7 --> Bluetooth TX (This needs to go to the voltage divider)
 //   Pin 8 --> Bluetooth RX
 SoftwareSerial mySerial(7, 8); // RX, TX
 
