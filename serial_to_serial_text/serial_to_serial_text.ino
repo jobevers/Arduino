@@ -15,25 +15,10 @@ void setup() {
   Serial.println("OK. LETS GO");
 }
 
-int idx = 0;
-uint8_t data[20];
-
 void loop() {
-  while (mySerial.available()) {
-    uint8_t d;
-    d = mySerial.read();
-    data[idx] = d;
-    idx++;
-    if (idx >= 20) {
-      for (int i = 0; i<20; i++) {
-        Serial.print(data[i], HEX);
-        Serial.print(" ");
-      }
-      Serial.print("\n");
-      idx = 0;
-    }
-//    char c;
-//    c = mySerial.read();
-//    Serial.println(c);
-  }
+  if (mySerial.available()) {
+    char c;
+    c = mySerial.read();
+    Serial.print(c);
+  };
 }

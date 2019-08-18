@@ -7,13 +7,15 @@
 // Wire the LED data line to this pin
 #define LED_DATA_PIN 4
 
-#define DEBUG 0
+#define DEBUG 1
 // This allows us to hookup a second arduino
 // to see what data is coming in from the BLE
 // (But, slows down the whole process as we now
 //  need to wait for the second serial action to finish)
 // Load the serial_to_serial sketch on the other arduino
 // and hookup pins 2 & 3 on each board (cross them!)
+// Arduino2 pin 2 (RX) -> Arduino 1 pin 3 (TX)
+// Arduino2 pin 3 (TX) -> Arduino 1 pin 2 (RX)
 #if DEBUG == 1
 const byte rxPin = 2;
 const byte txPin = 3;
@@ -24,12 +26,11 @@ SoftwareSerial mySerial(rxPin, txPin);
 const int payloadSize = 20;
 // this is how many pixels are on the front
 const int N = 25;
-// And we have no back, so this is the same
+// And with the back, this is the total length
 const int BUFFER_LENGTH = 50;
 // The size of the ring buffer we are using for
-// the frames. 4 will probably be about 1 second
-// of buffer
-const uint8_t RING_SIZE = 4;
+// the "key" frames.
+const uint8_t RING_SIZE = 6;
 
 // The buffer that contains the LEDs to show
 CRGB led[BUFFER_LENGTH];
@@ -41,7 +42,7 @@ CHSV hsv[N];
 // interpolations between them.
 CHSV frames[RING_SIZE][N];
 // saves when each frame should be shown
-uint8_t frameNum[N];
+uint16_t frameNum[N];
 // which frame in the ring is the "present" one
 uint8_t presentFrameIdx = 0;
 // which frame in the ring is the "target" one
@@ -51,7 +52,9 @@ uint8_t incomingFrameIdx = 0;
 // track how many frames we have saved in the ring
 uint8_t fullFrameCount = 0;
 // a counter for the frames
-uint8_t frameN = 0;
+// this wraps at 65535, which is every 36 minutes.
+// TODO: do a reset before this happens!
+uint16_t frameN = 0;
 // each frame takes two messages to fill and so this helps
 // keep track of whether we've recieved both of those
 uint8_t nextMessage = 0;
@@ -89,10 +92,13 @@ void setup() {
   memset8(led, 4, BUFFER_LENGTH * sizeof(CRGB));
   memset8(frames, 4, RING_SIZE * N * sizeof(CHSV));
 
+#if DEBUG == 1
   // My test string of LEDs:
-  // FastLED.addLeds<WS2811, LED_DATA_PIN, RGB>(led, BUFFER_LENGTH).setCorrection(Typical8mmPixel);
+  FastLED.addLeds<WS2811, LED_DATA_PIN, RGB>(led, BUFFER_LENGTH).setCorrection(Typical8mmPixel);
+#else
   // The actual jackets
   FastLED.addLeds<WS2812B, LED_DATA_PIN, GRB>(led, BUFFER_LENGTH).setCorrection(Typical8mmPixel);
+#endif
   FastLED.show();
   digitalWrite(LED_BUILTIN, LOW);
 }
@@ -129,12 +135,17 @@ void readIncomingData() {
   // Will take 20.8 ms to ready 20 bytes (at 9600 baud)
   Serial.readBytes(data, payloadSize);
 #if DEBUG == 1
-  mySerial.write(data, payloadSize);
+  for (int i = 0; i < payloadSize; i++) {
+    mySerial.print(data[i], HEX);
+    mySerial.print(" ");
+  }
+  mySerial.println();
 #endif
   // The first four bits specify the message type
   uint8_t msg = (data[0] & 0xF0) >> 4;
   if (msg == 0 || msg == 1) {
     if (msg != nextMessage) {
+      mySerial.println("MISMATCH");
       // Something got messed up.  We should get out of here.
       // reset nextMessage = 0 so that we can start fresh.
       nextMessage = 0;
@@ -149,6 +160,7 @@ void readIncomingData() {
       return;
     }
     if (fullFrameCount == RING_SIZE) {
+      mySerial.println("FULL");
       // Our ring buffer is already full, so we need to get out of here
       nextMessage = 0;
       sendRejectResponse();
@@ -160,10 +172,11 @@ void readIncomingData() {
     frameInc = data[0] & 0x0F;
     CHSV* frame = frames[incomingFrameIdx];
     // this is when this frame should be shown
-    frameNum[incomingFrameIdx] = data[1];
+    uint16_t myFrameNum = data[1] << 8 | data[2];
+    frameNum[incomingFrameIdx] = myFrameNum;
     // For msg = 0, this reads in the even pixels (0, 2, 4..)
     // and for msg = 1, this reads in the odd pixels (1, 3, 5..)
-    int offset = 2; // Need to account for the first msg byte and the
+    int offset = 3; // Need to account for the first msg byte and the
     for (int i = 0; 2 * i + msg < N; i++) {
       frame[2 * i + msg] = unpack(data[i + offset]);
     }
@@ -183,8 +196,9 @@ void readIncomingData() {
       nextMessage = 1;
     }
     sendResponse();
+    digitalWrite(LED_BUILTIN, LOW);
+    return;
   }
-  digitalWrite(LED_BUILTIN, LOW);
 }
 
 // we don't have enough bandwidth to send a full 3 bytes
@@ -192,9 +206,9 @@ void readIncomingData() {
 // I put together a little jupyter notebook looking at some different
 // options and this seemed to be a pretty reasonable one.
 //
-// Not that I'm still leaving some bytes unused.  We actually have 36 bytes
-// for the 25 pixels, which is 11 bits per pixel, which could be
-// 128 hues, 4 saturations and 4 values but for a lot more book-keeping.
+// Not that I'm still leaving some bytes unused.  We actually have 34 bytes
+// for the 25 pixels, which is 10 bits per pixel, which could be
+// 128 hues, 4 saturations and 2 values but for a lot more book-keeping.
 CHSV unpack(uint8_t datum) {
   // 32 different hues, evenly spaced:
   // 0,8,16,24,...,232,240,248
@@ -211,26 +225,30 @@ CHSV unpack(uint8_t datum) {
 
 
 void sendResponse() {
-  Serial.write(frameN);
-  sendZeros(19);
+  uint8_t response[] = {
+    0x00, (uint8_t)((frameN & 0xFF00 >> 8)), (uint8_t)(frameN & 0x00FF), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00,                              0x00,                       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+  };
+  Serial.write(response, payloadSize);
 }
 
 void sendRejectResponse() {
-  Serial.write(frameN);
   // Send 1 as the second byte to tell android NOT to send us the
   // second message in this frame. Probably because our ring buffer
   // is full and we'd just have to throw out the data.
-  Serial.write(0x01);
-  sendZeros(18);
+  // TODO: actually implement this ignore on the Android side
+  uint8_t response[] = {
+    0x00, (uint8_t)((frameN & 0xFF00 >> 8)), (uint8_t)(frameN & 0x00FF),  0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00,                              0x00,                        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  };
+  Serial.write(response, payloadSize);
 }
 
-void sendZeros(int n) {
-  for (int i = 0; i < n; i++) {
-    Serial.write(0x00);
-  }
-}
 
 void setScale() {
+  // scale is a value between 0-255 that determines how much blend to do.
+  // when frameN = frameNum[presentFrameIdx] then scale = 0
+  // when frameN = frameNum[targetFrameIdx]  then scale = 255
   deltaScale = 256 / (frameNum[targetFrameIdx] - frameNum[presentFrameIdx]);
   scale = deltaScale * (frameN - frameNum[presentFrameIdx]);
 }
@@ -242,20 +260,34 @@ void playFrame() {
       // we're still loading
       return;
     }
+#if DEBUG == 1
+    mySerial.println("DONE LOADING");
+#endif
     loading = false;
     frameN = frameNum[presentFrameIdx];
     setScale();
   }
   frameN += frameInc;
+#if DEBUG == 1
+  printDebug();
+#endif
+  // if we reset the Scale in the next block than we don't need to
+  // apply the deltaScale as the scale will already be calculated correctly
   boolean resetScale = false;
   while (fullFrameCount >= 2) {
-    if (frameN < frameNum[targetFrameIdx]) {
+    // Comparing frame numbers (frameN < frameNum[targetFrameIdx]) is dangerous
+    // because they overflow.  But that only happens at 65536 so we just
+    // need to make sure to reset before then!
+    if (frameNum[presentFrameIdx] <= frameN && frameN < frameNum[targetFrameIdx]) {
       break;
     }
     resetScale = true;
     presentFrameIdx = ringInc(presentFrameIdx);
     targetFrameIdx = ringInc(targetFrameIdx);
     fullFrameCount--;
+#if DEBUG == 1
+    mySerial.println("SWITCHED FRAME");
+#endif
     setScale();
   }
   if (!resetScale) {
@@ -265,10 +297,37 @@ void playFrame() {
   copyAndShow();
 }
 
+void printDebug() {
+  mySerial.print("N: ");
+  mySerial.print(frameN);
+  mySerial.print(" ffc: ");
+  mySerial.print(fullFrameCount);
+  mySerial.print(" p: ");
+  mySerial.print(presentFrameIdx);
+  mySerial.print(" t: ");
+  mySerial.print(targetFrameIdx);
+  mySerial.print(" i: ");
+  mySerial.print(incomingFrameIdx);
+  mySerial.print(" ");
+  // Print when we're supposed to switch frames
+  for (int i = 0; i < fullFrameCount; i++) {
+    mySerial.print(frameNum[(presentFrameIdx + i) % RING_SIZE]);
+    mySerial.print(",");
+  }
+  mySerial.println();
+}
+
 void setLed() {
   if (fullFrameCount >= 2) {
+#if DEBUG == 1
+    mySerial.print("INTERP ");
+    mySerial.println(scale);
+#endif
     interpolate();
   } else {
+#if DEBUG == 1
+    mySerial.println("CURRENT");
+#endif
     // With only one frame we have no choice but to
     // just show the present one
     for (int i = 0; i < N; i++) {
