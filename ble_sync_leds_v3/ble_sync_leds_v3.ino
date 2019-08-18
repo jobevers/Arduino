@@ -7,6 +7,11 @@
 // Wire the LED data line to this pin
 #define LED_DATA_PIN 4
 
+// Have multiple debug levels because print a lot
+// slows down everything! So, debug 1 will print just a minimal amount
+// to hint at the state
+// debug 2 prints the actual messages recieved and occasionally the state
+// debug 3 prints the actual messages recieved and verbosely the state
 #define DEBUG 1
 // This allows us to hookup a second arduino
 // to see what data is coming in from the BLE
@@ -62,9 +67,14 @@ uint8_t nextMessage = 0;
 // on startup we want to fill up the ring before doing anything
 // so don't display anything until
 bool loading = true;
+
 // How much to increase the frame count by. This can be set by Android in a message
 // so that a slow device can be sped up.
 uint8_t frameInc = 1;
+// We want the frame ring buffer to always be near 5 frames
+// and so I'm going to slow frameN as the ring buffer gets empty
+// and need to keep a counter so that I can skip updates occasionally
+uint8_t frameIncCounter = 0;
 
 // how far along we are from present -> target frames.
 // 0 = at present frame
@@ -112,7 +122,8 @@ void loop() {
 
   // I have no idea how this work (try reading the code, good luck).
   // but this should happen every frame.
-  EVERY_N_MILLISECONDS(30) {
+  // 30fps = 1000 / 30 = 33;
+  EVERY_N_MILLISECONDS(33) {
     playFrame();
   }
 }
@@ -135,6 +146,8 @@ void readIncomingData() {
   // Will take 20.8 ms to ready 20 bytes (at 9600 baud)
   Serial.readBytes(data, payloadSize);
 #if DEBUG == 1
+  mySerial.println("M");
+# elif DEBUG == 2
   for (int i = 0; i < payloadSize; i++) {
     mySerial.print(data[i], HEX);
     mySerial.print(" ");
@@ -145,7 +158,9 @@ void readIncomingData() {
   uint8_t msg = (data[0] & 0xF0) >> 4;
   if (msg == 0 || msg == 1) {
     if (msg != nextMessage) {
+#if DEBUG == 1
       mySerial.println("MISMATCH");
+#endif
       // Something got messed up.  We should get out of here.
       // reset nextMessage = 0 so that we can start fresh.
       nextMessage = 0;
@@ -160,7 +175,9 @@ void readIncomingData() {
       return;
     }
     if (fullFrameCount == RING_SIZE) {
+#if DEBUG == 1
       mySerial.println("FULL");
+#endif
       // Our ring buffer is already full, so we need to get out of here
       nextMessage = 0;
       sendRejectResponse();
@@ -182,16 +199,29 @@ void readIncomingData() {
     }
     if (msg == 1) {
       if (fullFrameCount == 1) {
-        // Since there was only one frame left in the buffer, there
-        // was no target frame and were were just showing the present
-        // frame without any interpolation.
-        // Now that we have a second frame, we'll be interpolating
-        // and we need to set the scale here.
-        setScale();
+        // If the frame rate on the two devices starts to get off
+        // we could end up in the perverse situation in which
+        // our frameN is larger than the myFrameNum in the message
+        // and so... it seems the only thing to do would be to knock
+        // the frameN back down.
+        if (frameN > myFrameNum) {
+          frameN = myFrameNum;
+        } else {
+          // Since there was only one frame left in the buffer, there
+          // was no target frame and were were just showing the present
+          // frame without any interpolation.
+          // Now that we have a second frame, we'll be interpolating
+          // and we need to set the scale here.
+          setScale();
+        }
       }
       nextMessage = 0;
       fullFrameCount++;
       incomingFrameIdx = ringInc(incomingFrameIdx);
+#if DEBUG >= 2
+      mySerial.println("ADDED");
+      printDebug();
+#endif
     } else {
       nextMessage = 1;
     }
@@ -226,7 +256,7 @@ CHSV unpack(uint8_t datum) {
 
 void sendResponse() {
   uint8_t response[] = {
-    0x00, (uint8_t)((frameN & 0xFF00 >> 8)), (uint8_t)(frameN & 0x00FF), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, (uint8_t)((frameN & 0xFF00) >> 8), (uint8_t)(frameN & 0x00FF), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00,                              0x00,                       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
   };
   Serial.write(response, payloadSize);
@@ -238,7 +268,7 @@ void sendRejectResponse() {
   // is full and we'd just have to throw out the data.
   // TODO: actually implement this ignore on the Android side
   uint8_t response[] = {
-    0x00, (uint8_t)((frameN & 0xFF00 >> 8)), (uint8_t)(frameN & 0x00FF),  0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, (uint8_t)((frameN & 0xFF00) >> 8), (uint8_t)(frameN & 0x00FF),  0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00,                              0x00,                        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   };
   Serial.write(response, payloadSize);
@@ -256,7 +286,8 @@ void setScale() {
 
 void playFrame() {
   if (loading) {
-    if (fullFrameCount < RING_SIZE) {
+    // Don't fully load the ring buffer.
+    if (fullFrameCount < RING_SIZE - 1) {
       // we're still loading
       return;
     }
@@ -267,9 +298,14 @@ void playFrame() {
     frameN = frameNum[presentFrameIdx];
     setScale();
   }
+  setFrameInc();
   frameN += frameInc;
-#if DEBUG == 1
-  printDebug();
+
+#if DEBUG == 2
+  mySerial.print("N: ");
+  mySerial.println(frameN);
+#elif DEBUG >= 3
+  printDebug()
 #endif
   // if we reset the Scale in the next block than we don't need to
   // apply the deltaScale as the scale will already be calculated correctly
@@ -287,6 +323,7 @@ void playFrame() {
     fullFrameCount--;
 #if DEBUG == 1
     mySerial.println("SWITCHED FRAME");
+    printDebug();
 #endif
     setScale();
   }
@@ -295,6 +332,26 @@ void playFrame() {
   }
   setLed();
   copyAndShow();
+}
+
+void setFrameInc() {
+  // Try to speed up / slow down our frame count to adjust to what we're getting
+  frameIncCounter += 1;
+  if (fullFrameCount < 4) {
+    // SLOW DOWN
+    // If fullFrameCount = 2 then we skip every other frame so we're at 15.15 fps
+    // If fullFrameCount = 3 then we skip every third frame so we're at 20.2  fps
+    if ((frameIncCounter % fullFrameCount) == 0) {
+      frameInc = 0;
+    }
+  } else if (fullFrameCount == 5) {
+    // SPEED UP
+    // If fullFrameCount = 5 then we double every  frame so we're at 60 fps
+    frameInc = 2;
+  } else if (fullFrameCount == 6) {
+    // If fullFrameCount = 6 then we triple every frame so we're at 90 fps
+    frameInc = 3;
+  }
 }
 
 void printDebug() {
@@ -319,7 +376,8 @@ void printDebug() {
 
 void setLed() {
   if (fullFrameCount >= 2) {
-#if DEBUG == 1
+#if DEBUG >= 3
+    // interpolation seems to be working so I'm moving that to level 2 debug
     mySerial.print("INTERP ");
     mySerial.println(scale);
 #endif
