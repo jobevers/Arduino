@@ -12,7 +12,7 @@
 // to hint at the state
 // debug 2 prints the actual messages recieved and occasionally the state
 // debug 3 prints the actual messages recieved and verbosely the state
-#define DEBUG 1
+#define DEBUG 0
 // This allows us to hookup a second arduino
 // to see what data is coming in from the BLE
 // (But, slows down the whole process as we now
@@ -354,6 +354,7 @@ void setFrameInc() {
   }
 }
 
+#if DEBUG > 0
 void printDebug() {
   mySerial.print("N: ");
   mySerial.print(frameN);
@@ -373,6 +374,7 @@ void printDebug() {
   }
   mySerial.println();
 }
+#endif
 
 void setLed() {
   if (fullFrameCount >= 2) {
