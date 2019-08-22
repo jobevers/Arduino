@@ -65,8 +65,12 @@ uint16_t frameN = 0;
 uint8_t nextMessage = 0;
 
 // on startup we want to fill up the ring before doing anything
-// so don't display anything until
+// so don't display anything until done loading.
 bool loading = true;
+// If an explicit reset/load is requested from the android
+// we can also set the color
+// As a default, going with a light blue.
+CHSV loadColor = CHSV(128, 255, 255);//CHSV(183, 60, 80);
 
 // How much to increase the frame count by. This can be set by Android in a message
 // so that a slow device can be sped up.
@@ -157,78 +161,107 @@ void readIncomingData() {
   // The first four bits specify the message type
   uint8_t msg = (data[0] & 0xF0) >> 4;
   if (msg == 0 || msg == 1) {
-    if (msg != nextMessage) {
+    handleMsg0And1(msg, data);
+  } else if (msg == 2) {
+    handleMsg2(data);
+  }
+}
+
+// reset the state of the system so that we start loading
+// up our buffer from fresh.
+// This can happen on a disconnect, a button push.
+// It also needs to happen every 36 minutes or so
+// to prevent a frame count overflow.
+void reset() {
+  loading = true;
+  presentFrameIdx = 0;
+  targetFrameIdx = 1;
+  incomingFrameIdx = 0;
+  fullFrameCount = 0;
+  frameN = 0;
+  nextMessage = 0;
+}
+
+// TODO: blinking would be cool!
+//       maybe specify loadColor1 and loadColor2 and switch.
+void handleMsg2(uint8_t* data) {
+  reset();
+  loadColor = CHSV(data[3], data[4], data[5]);
+  sendResponse();
+  digitalWrite(LED_BUILTIN, LOW);
+}
+
+void handleMsg0And1(uint8_t msg, uint8_t* data) {
+  if (msg != nextMessage) {
 #if DEBUG == 1
-      mySerial.println("MISMATCH");
+    mySerial.println("MISMATCH");
 #endif
-      // Something got messed up.  We should get out of here.
-      // reset nextMessage = 0 so that we can start fresh.
-      nextMessage = 0;
-      if (msg == 0) {
-        // Don't send msg1 because we'll have to ignore it.
-        sendRejectResponse();
-      } else {
-        // reject isn't necessary here because we want msg0 next
-        sendResponse();
-      }
-      digitalWrite(LED_BUILTIN, LOW);
-      return;
-    }
-    if (fullFrameCount == RING_SIZE) {
-#if DEBUG == 1
-      mySerial.println("FULL");
-#endif
-      // Our ring buffer is already full, so we need to get out of here
-      nextMessage = 0;
+    // Something got messed up.  We should get out of here.
+    // reset nextMessage = 0 so that we can start fresh.
+    nextMessage = 0;
+    if (msg == 0) {
+      // Don't send msg1 because we'll have to ignore it.
       sendRejectResponse();
-      digitalWrite(LED_BUILTIN, LOW);
-      return;
-    }
-    // Can add between 0 and 15 frames the next time
-    // we increment frames
-    frameInc = data[0] & 0x0F;
-    CHSV* frame = frames[incomingFrameIdx];
-    // this is when this frame should be shown
-    uint16_t myFrameNum = data[1] << 8 | data[2];
-    frameNum[incomingFrameIdx] = myFrameNum;
-    // For msg = 0, this reads in the even pixels (0, 2, 4..)
-    // and for msg = 1, this reads in the odd pixels (1, 3, 5..)
-    int offset = 3; // Need to account for the first msg byte and the
-    for (int i = 0; 2 * i + msg < N; i++) {
-      frame[2 * i + msg] = unpack(data[i + offset]);
-    }
-    if (msg == 1) {
-      if (fullFrameCount == 1) {
-        // If the frame rate on the two devices starts to get off
-        // we could end up in the perverse situation in which
-        // our frameN is larger than the myFrameNum in the message
-        // and so... it seems the only thing to do would be to knock
-        // the frameN back down.
-        if (frameN > myFrameNum) {
-          frameN = myFrameNum;
-        } else {
-          // Since there was only one frame left in the buffer, there
-          // was no target frame and were were just showing the present
-          // frame without any interpolation.
-          // Now that we have a second frame, we'll be interpolating
-          // and we need to set the scale here.
-          setScale();
-        }
-      }
-      nextMessage = 0;
-      fullFrameCount++;
-      incomingFrameIdx = ringInc(incomingFrameIdx);
-#if DEBUG >= 2
-      mySerial.println("ADDED");
-      printDebug();
-#endif
     } else {
-      nextMessage = 1;
+      // reject isn't necessary here because we want msg0 next
+      sendResponse();
     }
-    sendResponse();
     digitalWrite(LED_BUILTIN, LOW);
     return;
   }
+  if (fullFrameCount == RING_SIZE) {
+#if DEBUG == 1
+    mySerial.println("FULL");
+#endif
+    // Our ring buffer is already full, so we need to get out of here
+    nextMessage = 0;
+    sendRejectResponse();
+    digitalWrite(LED_BUILTIN, LOW);
+    return;
+  }
+  // Can add between 0 and 15 frames the next time
+  // we increment frames
+  frameInc = data[0] & 0x0F;
+  CHSV* frame = frames[incomingFrameIdx];
+  // this is when this frame should be shown
+  uint16_t myFrameNum = data[1] << 8 | data[2];
+  frameNum[incomingFrameIdx] = myFrameNum;
+  // For msg = 0, this reads in the even pixels (0, 2, 4..)
+  // and for msg = 1, this reads in the odd pixels (1, 3, 5..)
+  int offset = 3; // Need to account for the first msg byte and the
+  for (int i = 0; 2 * i + msg < N; i++) {
+    frame[2 * i + msg] = unpack(data[i + offset]);
+  }
+  if (msg == 1) {
+    if (fullFrameCount == 1) {
+      // If the frame rate on the two devices starts to get off
+      // we could end up in the perverse situation in which
+      // our frameN is larger than the myFrameNum in the message
+      // and so... it seems the only thing to do would be to knock
+      // the frameN back down.
+      if (frameN > myFrameNum) {
+        frameN = myFrameNum;
+      } else {
+        // Since there was only one frame left in the buffer, there
+        // was no target frame and we were just showing the present
+        // frame without any interpolation.
+        // Now that we have a second frame, we'll be interpolating
+        // and we need to set the scale here.
+        setScale();
+      }
+    }
+    nextMessage = 0;
+    fullFrameCount++;
+    incomingFrameIdx = ringInc(incomingFrameIdx);
+#if DEBUG >= 2
+    mySerial.println("ADDED");
+    printDebug();
+#endif
+  } else {
+    nextMessage = 1;
+  }
+  sendResponse();
+  digitalWrite(LED_BUILTIN, LOW);
 }
 
 // we don't have enough bandwidth to send a full 3 bytes
@@ -283,12 +316,20 @@ void setScale() {
   scale = deltaScale * (frameN - frameNum[presentFrameIdx]);
 }
 
+void drawLoading() {
+  for (int i = 0; i < BUFFER_LENGTH; i++) {
+    led[i] = loadColor;
+  }
+  FastLED.show();
+}
+
 
 void playFrame() {
   if (loading) {
     // Don't fully load the ring buffer.
     if (fullFrameCount < RING_SIZE - 1) {
       // we're still loading
+      drawLoading();
       return;
     }
 #if DEBUG == 1
