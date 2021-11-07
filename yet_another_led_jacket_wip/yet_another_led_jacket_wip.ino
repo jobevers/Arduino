@@ -49,7 +49,7 @@ void loop() {
   // Code here to populate next_led
   // Should read from the serial port
   for (int i = 0; i < BUFFER_LENGTH; i++) {
-      next[i] = CHSV(hue + i * 5, 255, 255);
+      next_led[i] = CHSV(hue + i * 5, 255, 255);
   }
   if (now >= switch_time) {
     for (int i = 0; i < BUFFER_LENGTH; i++) {
