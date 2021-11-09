@@ -11,7 +11,10 @@ int mapping[] = {
 void setup() {
   // initialize digital pin 13 as an output.
   pinMode(13, OUTPUT);
-  pinMode(6, OUTPUT);  
+  pinMode(6, OUTPUT);
+  for (int i=0; i<14; i++) {
+    pinMode(i, OUTPUT); // internal led
+  }
 
   // Set uninitialised LEDs to a faint grey
   memset8(led, 255, N_LEDS * sizeof(CRGB));
@@ -34,6 +37,15 @@ void setup() {
 int n_lit_leds = 5;
 int lit_leds[] = {0, 1, 2, 3, 4};
 void loop(){
+  for (int i=0; i<14; i++) {
+    digitalWrite(i, HIGH); // Give pin 5 a HIGH voltage level (on), which lights up the LED
+  }
+  delay(1000);           // Pause for 1000 milliseconds (one second), the LED stays on
+  for (int i=0; i<14; i++) {
+    digitalWrite(i, LOW); // Give pin 5 a HIGH voltage level (on), which lights up the LED
+  }
+  delay(1000);
+  
   for (int i=0; i<N_LEDS; i++) {
     led[i] = CRGB::Black;  
   }
