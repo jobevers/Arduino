@@ -1,5 +1,5 @@
 //
-// The idea here is have four LEDS with similar colors, each
+// The idea here is have 15 LEDS with similar colors, each
 // transitioning from max saturation & max value in hue A to a gray
 // and then transition to max saturation & max value to hue B, where hue A and hue B
 // are nearly complementary.  The transition should follow a triangle wave.
@@ -50,7 +50,7 @@ void setup() {
     target_values[i] = random_target();
   }
 
-  const int output_pin = 6;
+  const int output_pin = 4;
   FastLED.addLeds<WS2811, output_pin, RGB>(led, N_LEDS).setCorrection(Typical8mmPixel);
   FastLED.show();
  
